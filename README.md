@@ -1,5 +1,35 @@
 # Conjur Enterprise cluster and followers + Podman + RHEL 9 + Keepalived + Nginx
-A guide to setup Conjur Enterprise cluster and followers on Podman on RHEL 9 using:
+
+## Introduction
+A Conjur Enterprise deployments consists of 2 planes:
+1. Control plane called the Conjur cluster
+  - The Conjur Cluster comprises 1 leader node, 1 synchronous standby node, and 1 or more asynchronous standby nodes
+  - Only the leader is active, all standby nodes are just data replicas
+2. Client access plane called the Conjur follower
+  - The Conjur follower comprises identical follower nodes that are all active
+  - The followers are meant to be deployed close to the client applications to handle read requests, including authentication, permission checks, and secret fetches
+
+
+Ref: <https://docs.cyberark.com/Product-Doc/OnlineHelp/AAM-DAP/Latest/en/Content/References/cjr-architecture.htm>
+
+A load balancer (LB) is recommended to be placed in front of each plane to facilitate high availabiliy and load balancing
+
+## Motivation for this guide
+- The Conjur cluster is an active-passive cluster, using LB to provide high availability and route traffic just to 1 node doesn't seem to be the most efficient solution
+  - The LB tier is a dependency on external factors - this can create operational overhead and additional complexities during deployment and troubleshooting
+  - The health check on the passive nodes will result in large volume of real-server-down alerts
+  - Depending on the LB proposed, Conjur leader failover detection may not work as expected, or there may be delays from the LB in traffic routing after Conjur leader failover
+- Active-passive clustering solutions (routers, firewalls, databases, even LBs) commonly use VRRP to perform virtual service failover
+  - Keepalived implements VRRP on linux servers
+  - It is lightweight and simple to configure
+  - It is reliable and fast in detecting a failover and moving the virtual service to the promoted leader node
+- LB is still required to balance traffic across the Conjur follower nodes
+  - Nginx + Keepalived is a common LB solution based on the paid [Nginx Plus version](https://docs.nginx.com/nginx/admin-guide/high-availability/ha-keepalived/)
+
+## Solution Overview
+![image](images/Architecture.png)
+
+This guide walks through the setup for Conjur Enterprise cluster and followers on Podman on RHEL 9 using:
 - Keepalived for cluster floating IP address
 - Nginx + Keepalived load balancers for followers
 
@@ -345,6 +375,7 @@ curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-clu
 ```console
 curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-cluster/raw/main/keepalived-cjr3.conf
 ```
+
 📌 Perform on **all Conjur cluster nodes**
 - Enable and start Keepalived service
 ```console
@@ -439,8 +470,10 @@ curl https://conjur.vx/health
           "replication_lag_bytes": 0
         }
 ```
+
 ## 5.5 Add the virtual IP of the follower service to trusted proxies on follower nodes
 📌 Perform on **both Conjur follower nodes**
+
 Ref :<https://docs.cyberark.com/Product-Doc/OnlineHelp/AAM-DAP/Latest/en/Content/Deployment/DAP/manage-config-file.htm>
 ```console
 podman exec conjur sed -i 's/\# trusted_proxies: \[\]/trusted_proxies: \[192.168.17.160\]/' /etc/conjur/config/conjur.yml
@@ -513,6 +546,7 @@ curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-clu
 ```console
 curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-cluster/raw/main/keepalived-lb2.conf
 ```
+
 📌 Perform on **both lb nodes**
 - Enable and start Keepalived and Nginx service
 ```console
