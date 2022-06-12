@@ -338,7 +338,7 @@ curl https://cjr1.vx/health
 
     - ① The `conjur` service in the container or the container itself stops running
     - ② The tracking srcipt detects this and the node loses the 50 weight it has previously gained from the running service, bringing it back to 100 priority
-    - ③ The manual/auto failover mechanisms in Conjur cluster (discussed in later sections) elects and promotes standby node 2 (cjr3.vx), the node gains 50 weight and brings it to 130 priority - being the highest priority now, it becomes the master node and brings up the virtual IP address
+    - ③ The manual/auto failover mechanisms in Conjur cluster (discussed in [Section 7](#7-conjur-cluster-failover-mechanisms)) elects and promotes standby node 2 (cjr3.vx), the node gains 50 weight and brings it to 130 priority - being the highest priority now, it becomes the master node and brings up the virtual IP address
 
 - In event of a Keepalived state change, the `conjur-ha-notify.sh` script will write an event to logger
 - Files provided in this repo for Conjur cluster Keepalived configuration:
@@ -389,7 +389,7 @@ curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-clu
 ```console
 systemctl enable --now keepalived
 ```
-- Verify that the virtual IP works by curl-ing to the Conjur cluster service FQDN
+- Verify that the virtual IP works by cURL-ing to the Conjur cluster service FQDN
 ```console
 curl https://conjur.vx/health
 ```
@@ -560,15 +560,252 @@ curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-clu
 ```console
 systemctl enable --now keepalived nginx
 ```
-- Verify that the virtual IP works by curl-ing to the Conjur follower service FQDN
+- Verify that the virtual IP works by cURL-ing to the Conjur follower service FQDN
 ```console
 curl https://follower.vx/health
 ```
 
-# 7.Manual-failover Conjur cluster
-## 7.1 Manual failover procedure
-## 7.2 Failback procedure for a manual-failover Conjur cluster
+# 7. Conjur cluster failover mechanisms
+At this point the Conjur cluster construction is complete
+- The Conjur cluster can be configured into an auto-failover cluster to enable the Conjur standby nodes to detect leader failure and automatically promote a standby node to takeover as leader
+- Otherwise, the Conjur cluster can still recover from a leader failure via manual failover procedure promote a standby node to takeover as leader
 
-# 8. Auto-failover Conjur cluster
-## 8.1 Auto failover procedure
-## 8.2 Failback procedure for an auto-failover Conjur cluster
+☝️ **Note**: In both manual and auto failover mechanisms, Keepalived is able to "move" the virtual IP address to the new Conjur leader to ensure Conjur cluster service availability
+
+## 7.1 Conjur cluster auto failover
+Auto-failover is an add-on capability to an HA cluster
+
+After configuring an HA cluster, the following must be done to add auto-failover to the cluster:  
+- Create a policy that describes and configures the auto-failover cluster
+- Use **evoke** commands to enroll the cluster nodes into an **etcd** cluster
+
+After auto-failover configuration on a cluster, a **cluster service** runs on the Master and each Standby in the cluster
+- This cluster service implements the auto-failover functionality
+- The cluster service incorporates the **etcd service** and the **Raft consensus algorithm**, both industry-accepted open source solutions, to monitor cluster nodes and perform auto-failover
+
+Ref: <https://docs.cyberark.com/Product-Doc/OnlineHelp/AAM-DAP/Latest/en/Content/Deployment/HighAvailability/deploy-auto-failover-intro.htm>
+
+### 7.1.1 Configure auto-failover
+Ref: <https://docs.cyberark.com/Product-Doc/OnlineHelp/AAM-DAP/Latest/en/Content/Deployment/HighAvailability/auto-failover-setup-continue.htm>
+- Initialize Conjur CLI and login to the Conjur cluster
+```console
+conjur init -u https://conjur.vx
+conjur login -i admin -p CyberArk123!
+```
+- Download the auto-failover cluster policy and load to the Conjur cluster
+- ☝️ **Note**: do read the policy structure in CyberArk Docs and the provided `vx-cluster.yaml` file to understand what the policy does
+```console
+curl -L -o vx-cluster.yaml https://github.com/joetanx/conjur-cluster/raw/main/vx-cluster.yaml
+conjur policy load -b root -f vx-cluster.yaml
+```
+- Clean-up
+```console
+rm -f vx-cluster.yaml
+```
+- Enroll leader node into failover cluster
+  - 📌 Perform on **cjr1.vx**
+```console
+podman exec conjur evoke cluster enroll -n cjr1.vx vx-cluster
+```
+- Enroll standby node 1 into failover cluster
+  - 📌 Perform on **cjr2.vx**
+```console
+podman exec conjur evoke cluster enroll -n cjr2.vx -m cjr1.vx vx-cluster
+```
+- Enroll standby node 2 into failover cluster
+  - 📌 Perform on **cjr3.vx**
+```console
+podman exec conjur evoke cluster enroll -n cjr3.vx -m cjr1.vx vx-cluster
+```
+- Verify auto-failover cluster members
+```console
+podman exec conjur evoke cluster member list
+```
+
+### 7.1.2 Test auto failover
+At this point, the Conjur cluster is ready for auto failover
+- To simulate a leader node failure, stop the `conjur` service on the leader node:
+```console
+podman exec conjur sv stop conjur
+```
+
+❗❗❗ **Warning**: failure simulaton is irreversible, perform recovery procedures below to repair the cluster health
+
+#### 7.1.2.1 Confirm that the Keepalived detected the change and moved the virtual IP to the new leader node
+- Below cURL commands should succeed and output should show details of the new leader
+- The repair steps below assume that `cjr2.vx` is the new leader node
+```console
+curl https://conjur.vx/info
+curl https://conjur.vx/health
+```
+
+### 7.1.3 Repair cluster health after auto-failover
+- After the leader node failure and failover, the Conjur cluster is functional with 1 leader node and 1 asynchronous standby node
+- Recovery procedures are required to return the cluster to healthy level of having 1 leader node, 1 synchronous standby node and 1 asynchronous standby node
+
+☝️ **Note**: failed leader node cannot be added back to the cluster
+
+Ref: <https://docs.cyberark.com/Product-Doc/OnlineHelp/AAM-DAP/Latest/en/Content/Deployment/HighAvailability/repair-cluster-after-auto-failover.htm>
+
+#### 7.1.3.1 Stop and remove the Conjur container on failed leader node
+📌 Perform on **cjr1.vx**
+```console
+podman stop conjur
+podman rm conjur
+```
+
+#### 7.1.3.2 Generate seed files on new leader node
+📌 Perform on **cjr2.vx**
+```console
+podman exec conjur evoke seed standby cjr1.vx cjr2.vx > standby-cjr1.vx-seed.tar
+scp -o StrictHostKeyChecking=no standby-cjr1.vx-seed.tar root@cjr1.vx:
+```
+- Clean-up
+```console
+rm -f standby-cjr* .ssh/known_hosts
+```
+
+#### 7.1.3.3 Run new Conjur container on failed leader node
+📌 Perform on **cjr1.vx**
+```console
+podman run --name conjur -d \
+--restart=unless-stopped \
+-p "443:443" -p "444:444" -p "5432:5432" -p "1999:1999" \
+--log-driver journald \
+-v /opt/conjur/config:/etc/conjur/config:Z \
+-v /opt/conjur/security:/opt/cyberark/dap/security:Z \
+-v /opt/conjur/backups:/opt/conjur/backup:Z \
+-v /opt/conjur/seeds:/opt/cyberark/dap/seeds:Z \
+-v /opt/conjur/logs:/var/log/conjur:Z \
+registry.tld/conjur-appliance:12.6.0
+```
+
+#### 7.1.3.4 Unpack seed and setup as new standby node
+📌 Perform on **cjr1.vx**
+```console
+podman cp standby-cjr1.vx-seed.tar conjur:/tmp
+podman exec conjur evoke unpack seed /tmp/standby-cjr1.vx-seed.tar
+podman exec conjur evoke configure standby
+```
+- Clean-up
+```console
+podman exec conjur rm -rf /tmp/standby-cjr2.vx-seed.tar
+rm -f standby-cjr2.vx-seed.tar
+```
+
+#### 7.1.3.5 Notify the etcd service about the new node that will be joining the cluster
+📌 Perform on **cjr2.vx**
+```console
+podman exec conjur evoke cluster member add cjr1.vx
+```
+
+#### 7.1.3.6 Enroll new standby node to the cluster
+📌 Perform on **cjr1.vx**
+```console
+podman exec conjur evoke cluster enroll -r -n cjr1.vx -m cjr2.vx vx-cluster
+```
+
+- The Conjur cluster is now back to the healthy level of having 1 leader node, 1 synchronous standby node and 1 asynchronous standby node
+- ☝️ **Note**: You cannot failback the leader node to the original server, the auto-failover cluster will automatically promote the next leader node if the service is stopped on a promoted server
+  - The only way to failback the leader node to the original server is to trial and error the failover+repair procedures until the automatically promoted leader is the original server
+
+## 7.2 Manual failover
+
+In absence of the auto-failover configuration, the Conjur cluster can still recover from a leader failure via manual failover procedure promote a standby node to takeover as leader
+
+☝️ **Note**: a failed leader node cannot be added back to the cluster
+
+## 7.2.1 Manual failover procedure
+
+Ref: <https://docs.cyberark.com/Product-Doc/OnlineHelp/AAM-DAP/Latest/en/Content/Deployment/HighAvailability/manual-failover.htm>
+
+- Find the best failover candidate, which is the standby with the most advanced replication time-line
+- Assuming that standby node 1 (cjr2.vx) was the synchronous standby and standby node 2 (cjr3.vx) was the asynchronous standby before the leader failure, standby node 1 should have the more advanced replication time-line and hence, is the failover candidate
+
+#### 7.2.1.1 Stop replication on standby node 2
+📌 Perform on **cjr3.vx**
+- Suspending replication prevents replication timeline problems if the leader node suddenly comes back during failover procedure
+```console
+podman exec conjur evoke replication stop
+```
+
+#### 7.2.1.2 Rebase replication of standby node 2 to standby node 1
+📌 Perform on **cjr3.vx**
+```console
+podman exec conjur evoke replication rebase cjr3.vx
+```
+
+#### 7.2.1.3 Promote standby node 1 to become leader
+📌 Perform on **cjr2.vx**
+```console
+podman exec conjur evoke role promote
+```
+
+#### 7.2.1.4 Confirm that the Keepalived detected the change and moved the virtual IP to the new leader node
+- Below cURL commands should succeed and output should show that the leader node is cjr2.vx
+```console
+curl https://conjur.vx/info
+curl https://conjur.vx/health
+```
+
+### 7.2.2 Repair cluster health after manual-failover
+- After the failover cjr2.vx is now the new leader, and cjr3.vx is now replicating from cjr2.vx
+- cjr1.vx is still dead - the following steps will setup cjr1.vx as a new standby node
+
+#### 7.2.2.1 Stop and remove the Conjur container on failed leader node
+📌 Perform on **cjr1.vx**
+```console
+podman stop conjur
+podman rm conjur
+```
+
+#### 7.2.2.2 Generate seed files on new leader node
+📌 Perform on **cjr2.vx**
+```console
+podman exec conjur evoke seed standby cjr1.vx cjr2.vx > standby-cjr1.vx-seed.tar
+scp -o StrictHostKeyChecking=no standby-cjr1.vx-seed.tar root@cjr1.vx:
+```
+- Clean-up
+```console
+rm -f standby-cjr* .ssh/known_hosts
+```
+
+#### 7.2.2.3 Run new Conjur container on failed leader node
+📌 Perform on **cjr1.vx**
+```console
+podman run --name conjur -d \
+--restart=unless-stopped \
+-p "443:443" -p "444:444" -p "5432:5432" -p "1999:1999" \
+--log-driver journald \
+-v /opt/conjur/config:/etc/conjur/config:Z \
+-v /opt/conjur/security:/opt/cyberark/dap/security:Z \
+-v /opt/conjur/backups:/opt/conjur/backup:Z \
+-v /opt/conjur/seeds:/opt/cyberark/dap/seeds:Z \
+-v /opt/conjur/logs:/var/log/conjur:Z \
+registry.tld/conjur-appliance:12.6.0
+```
+
+#### 7.2.2.4 Unpack seed and setup as new standby node
+📌 Perform on **cjr1.vx**
+```console
+podman cp standby-cjr1.vx-seed.tar conjur:/tmp
+podman exec conjur evoke unpack seed /tmp/standby-cjr1.vx-seed.tar
+podman exec conjur evoke configure standby
+```
+- Clean-up
+```console
+podman exec conjur rm -rf /tmp/standby-cjr2.vx-seed.tar
+rm -f standby-cjr2.vx-seed.tar
+```
+
+#### 7.2.2.5 Optional: failover back to cjr1.vx as recovered leader node
+☝️ **Note**: this step only applies to a manual-failover cluster, the auto-failover cluster will automatically promote the next leader node if the service is stopped (as explained [above](#71-conjur-cluster-auto-failover)), do not attempt these steps below for an auto-failover cluster
+- The Conjur cluster is now back to the healthy level of having 1 leader node, 1 synchronous standby node and 1 asynchronous standby node
+- Below steps can be performed to failover back to cjr1.vx as recovered leader node
+  - Stop `conjur` service on cjr2.vx
+  - Stop replication on cjr3.vx and rebase it to cjr1.vx
+  - Promote cjr1.vx to leader
+  - Setup cjr2.vx as new standby
+  - Enable synchronous replication
+
+☝️ **Note**: Once cjr1.vx is recovered as leader node, Keepalived will also detect this and move the virtual IP address back to cjr1.vx
