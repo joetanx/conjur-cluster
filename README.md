@@ -255,7 +255,7 @@ curl https://cjr1.vx/health
 ```console
 podman exec conjur evoke replication sync start
 ```
-- Check health from leader again, you should see the `sync_state` change from `async` to `sync` + `potential`
+- Check health from leader again, you should see the `sync_state` change from `async` to `sync` for one standby node and `potential` for the other standby node
 ```console
 curl https://cjr1.vx/health
 ```
