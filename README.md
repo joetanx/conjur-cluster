@@ -115,7 +115,7 @@ systemctl enable conjur
 podman exec conjur evoke configure master --accept-eula -h conjur.vx --master-altnames "conjur.vx" -p CyberArk123! cyberark
 ```
 
-## 2.4 Setup Conjur certificates
+## 2.2 Setup Conjur certificates
 ### Lab environment certificate chain
 - The `conjur-certs.tgz` includes my personal certificate chain for CA, leader and follower, you should generate your own certificates
 - Refer to <https://joetanx.github.io/self-signed-ca/> for a guide to generate your own certificates
