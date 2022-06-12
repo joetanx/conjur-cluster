@@ -452,7 +452,7 @@ curl https://conjur.vx/health
         {
           "usename": "follower.vx",
           "application_name": "follower_flr1_vx_flr1_vx",
-          "client_addr": "192.168.17.161",
+          "client_addr": "192.168.0.21",
           "backend_start": "2022-06-12 07:58:43 +0000",
           "state": "streaming",
           "sent_lsn": "0/907AD78",
@@ -466,7 +466,7 @@ curl https://conjur.vx/health
         {
           "usename": "follower.vx",
           "application_name": "follower_flr2_vx_flr2_vx",
-          "client_addr": "192.168.17.162",
+          "client_addr": "192.168.0.22",
           "backend_start": "2022-06-12 07:57:27 +0000",
           "state": "streaming",
           "sent_lsn": "0/907AD78",
@@ -484,7 +484,7 @@ curl https://conjur.vx/health
 
 Ref :<https://docs.cyberark.com/Product-Doc/OnlineHelp/AAM-DAP/Latest/en/Content/Deployment/DAP/manage-config-file.htm>
 ```console
-podman exec conjur sed -i 's/\# trusted_proxies: \[\]/trusted_proxies: \[192.168.17.171,192.168.17.172\]/' /etc/conjur/config/conjur.yml
+podman exec conjur sed -i 's/\# trusted_proxies: \[\]/trusted_proxies: \[192.168.0.31,192.168.0.32\]/' /etc/conjur/config/conjur.yml
 podman exec conjur evoke configuration apply
 ```
 
