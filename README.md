@@ -27,7 +27,7 @@ A guide to setup Conjur Enterprise cluster and followers on Podman on RHEL 9 usi
 |Load balancers|lb{1..2}.vx|192.168.0.{31..32}|
 
 # 1. Setup host prerequisites and Conjur appliance container on all Conjur nodes
-☝️ Perform on **all Conjur nodes**
+📌 Perform on **all Conjur nodes**
 # 1.1 Setup host prerequisites
 - Install Podman
 - Upload `conjur-appliance_12.6.0.tar.gz` to the container host: contact your CyberArk representative to acquire the Conjur container image
@@ -108,7 +108,7 @@ systemctl enable conjur
 ```
 
 # 2. Setup Conjur leader node
-☝️ Perform on **Conjur leader node**: the leader node is `cjr1.vx` / `192.168.0.11` in this lab environment
+📌 Perform on **Conjur leader node**: the leader node is `cjr1.vx` / `192.168.0.11` in this lab environment
 ## 2.1 Configure Conjure leader
 - Edit the admin account password in `-p` option and the Conjur account (`cyberark`) according to your environment
 ```console
@@ -156,7 +156,7 @@ podman exec conjur sv status conjur nginx pg seed
 
 # 3. Setup Conjur standby nodes
 ## 3.1 Generate seed files on Conjur leader node
-☝️ Perform on **Conjur leader node**
+📌 Perform on **Conjur leader node**
 - These commands generate the seed files and copy them to the standby nodes using scp
 ```console
 podman exec conjur evoke seed standby cjr2.vx cjr1.vx > standby-cjr2.vx-seed.tar
@@ -169,8 +169,8 @@ scp -o StrictHostKeyChecking=no standby-cjr3.vx-seed.tar root@cjr3.vx:
 rm -f standby-cjr* .ssh/known_hosts
 ```
 
-## 3.2 Configure Conjur Standby 1
-☝️ Perform on **Conjur standby node 1**: this is `cjr2.vx` / `192.168.0.12` in this lab environment
+## 3.2 Configure Conjur standby 1
+📌 Perform on **Conjur standby node 1**: this is `cjr2.vx` / `192.168.0.12` in this lab environment
 - The seed generation step previously should have copied the seed file to the `/root` directory
 - Copy the seed file from host to container, unpack the seed file, Configure node as Conjur Standby
 ```console
@@ -192,8 +192,8 @@ podman exec conjur sv status conjur nginx pg seed
 curl https://cjr1.vx/health
 ```
 
-## 3.3 Configure Conjur Standby 2
-☝️ Perform on **Conjur standby node 2**: this is `cjr3.vx` / `192.168.0.13` in this lab environment
+## 3.3 Configure Conjur standby 2
+📌 Perform on **Conjur standby node 2**: this is `cjr3.vx` / `192.168.0.13` in this lab environment
 - The seed generation step previously should have copied the seed file to the `/root` directory
 - Copy the seed file from host to container, unpack the seed file, Configure node as Conjur Standby
 ```console
@@ -213,4 +213,89 @@ podman exec conjur sv status conjur nginx pg seed
 - Verify that the standby is replicating from the leader
 ```console
 curl https://cjr1.vx/health
+```
+
+# 4. Keepalived setup for Conjur cluster
+## 4.1 How does Keepalived work for Conjur cluster?
+- Keepalived provides high availability capabilities to automatically failover the virtual service in event of a node failure
+  - It uses virtual router redundancy protocol (VRRP) to assign the virtual IP to the master node
+- The master node sends heartbeat communication to the peer nodes continually
+  - If the master node fails, the peer nodes will detect the absence of heartbeat communication and starts an election for next suitable node to bring up the virtual IP on
+- The suitability of a node to be a master node is decided by the **priority** of the node
+  - Priority values configured for the Conjur cluster are:
+
+    |Node|Priority|
+    |---|---|
+    |cjr1.vx|100|
+    |cjr2.vx|90|
+    |cjr3.vx|80|
+
+- Keepalived can be configured with `track_process`, `track_interface`, and `track_script` functions with **weight** assigned that can affect the node priority according to the conditions
+- To track where the Conjur leader is, Keepalived is configured to detect whether the `conjur` service is running by a tracking script (`conjur-ha-check.sh`)which queries the conjur service status in the container
+  - This detection is assigned a weight value of 50
+  - The node with the container and the `conjur` service in the container is running will have additional 50 priority
+  - If the container itself or the `conjur` service in the container is not running, the node will have the default priority
+- Combining the priority and weight determination factors, the Keepalived master assignment will be like this:
+  - During normal operations
+
+    |Node|Conjur service status|Priority|Keepalived master|
+    |---|---|---|---|
+    |cjr1.vx|**Running**|**150**|✓|
+    |cjr2.vx|Not running|90|✗|
+    |cjr3.vx|Not running|80|✗|
+
+  - If the `conjur` service on leader node (cjr1.vx) fails and standby node 2 (cjr2.vx) gets promoted to leader
+
+    |Node|Conjur service status|Priority|Keepalived master|
+    |---|---|---|---|
+    |cjr1.vx|Not running|100|✗|
+    |cjr2.vx|Not running|90|✗|
+    |cjr3.vx|**Running**|**130**|✓|
+
+- In event of a Keepalived state change, the `conjur-ha-notify.sh` script will write an event to logger
+- Ref: <https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/load_balancer_administration/ch-keepalived-overview-vsa>
+
+- Files provided in this repo for Conjur cluster Keepalived configuration:
+
+  |File|Purpose|
+  |---|---|
+  |conjur-ha-check.sh|Script to track the `conjur` service status in the container|
+  |conjur-ha-notify.sh|Script to write event to logger on Keepalived status change|
+  |keepalived-cjr1.conf|Configuration file for cjr1.vx|
+  |keepalived-cjr2.conf|Configuration file for cjr2.vx|
+  |keepalived-cjr3.conf|Configuration file for cjr3.vx|
+
+☝️ **Note**: keepalived scripts should be placed in `/usr/libexec/keepalived/` where the correct SELinux file context `keepalived_unconfined_script_t` is assigned
+- Trying to get keepalive to run scripts from elsewhere may result in `permission denied` errors
+- Google for `keepalive setenforce 0` and you can see that many guides disable SELinux - disabling SELinux completely is an easy but not recommend way to fix the script-doesn't-run behaviour
+
+## 4.2 Setup Keepalived
+📌 Perform on **all nodes**
+```console
+yum -y install keepalived
+curl -L -o /usr/libexec/keepalived/conjur-ha-check.sh https://github.com/joetanx/conjur-cluster/raw/main/conjur-ha-check.sh
+curl -L -o /usr/libexec/keepalived/conjur-ha-notify.sh https://github.com/joetanx/conjur-cluster/raw/main/conjur-ha-notify.sh
+chmod +x /usr/libexec/keepalived/conjur-ha-check.sh
+chmod +x /usr/libexec/keepalived/conjur-ha-notify.sh
+mv /etc/keepalived/keepalived.conf /etc/keepalived/keepalived.conf.bak
+```
+- 📌 Perform on **cjr1.vx**
+```console
+curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-cluster/raw/main/keepalived-cjr1.conf
+```
+- 📌 Perform on **cjr2.vx**
+```console
+curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-cluster/raw/main/keepalived-cjr2.conf
+```
+- 📌 Perform on **cjr3.vx**
+```console
+curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-cluster/raw/main/keepalived-cjr3.conf
+```
+📌 Perform on **all nodes**
+```console
+systemctl enable --now keepalived
+```
+- Verify that the virtual IP working by curl-ing to the Conjur service FQDN
+```console
+curl https://conjur.vx/health
 ```
