@@ -311,7 +311,7 @@ curl https://cjr1.vx/health
     |cjr3.vx|80|
 
 - Keepalived can be configured with `track_process`, `track_interface`, and `track_script` functions with **weight** assigned that can affect the node priority according to the conditions
-- To track where the Conjur leader is, Keepalived is configured to detect whether the `conjur` service is running by a tracking script (`conjur-ha-check.sh`)which queries the conjur service status in the container
+- To track where the Conjur leader is, Keepalived is configured to detect whether the `conjur` service is running by a tracking script (`conjur-ha-check.sh`) which queries the conjur service status in the container
   - This detection is assigned a weight value of 50
   - The node with the container and the `conjur` service in the container is running will have additional 50 priority
   - If the container itself or the `conjur` service in the container is not running, the node will have the default priority
