@@ -1,0 +1,20 @@
+---
+- !policy
+  id: conjur
+  body:
+  - !policy
+      id: cluster/vx-cluster
+      annotations:
+        ttl: 10
+      body:
+      - !layer
+      - &hosts
+        - !host
+          id: cjr1.vx
+        - !host
+          id: cjr2.vx
+        - !host
+          id: cjr3.vx
+      - !grant
+        role: !layer
+        member: *hosts
