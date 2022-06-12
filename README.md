@@ -324,13 +324,17 @@ curl https://cjr1.vx/health
     |cjr2.vx|Not running|90|✗|
     |cjr3.vx|Not running|80|✗|
 
-  - If the `conjur` service on leader node (cjr1.vx) fails and standby node 2 (cjr2.vx) gets promoted to leader
+    ![image](images/Keepalived-Normal.png)
+
+  - If the `conjur` service on leader node (cjr1.vx) fails and standby node 2 (cjr3.vx) gets promoted to leader
 
     |Node|Conjur service status|Priority|Keepalived master|
     |---|---|---|---|
     |cjr1.vx|Not running|100|✗|
     |cjr2.vx|Not running|90|✗|
     |cjr3.vx|**Running**|**130**|✓|
+
+    ![image](images/Keepalived-Failover.png)
 
 - In event of a Keepalived state change, the `conjur-ha-notify.sh` script will write an event to logger
 - Files provided in this repo for Conjur cluster Keepalived configuration:
