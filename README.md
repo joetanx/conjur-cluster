@@ -632,12 +632,13 @@ podman exec conjur sv stop conjur
 ❗❗❗ **Warning**: failure simulaton is irreversible, perform recovery procedures below to repair the cluster health
 
 #### 7.1.2.1 Confirm that the Keepalived detected the change and moved the virtual IP to the new leader node
+👀 Observe the logs and interfaces across the Conjur cluster nodes to see how Keepalived tracks the leader node changes and assign the virtual IP address according to [the steps described above](#41-how-does-keepalived-work-for-conjur-cluster)
 - Below cURL commands should succeed and output should show details of the new leader
-- The repair steps below assume that `cjr2.vx` is the new leader node
 ```console
 curl https://conjur.vx/info
 curl https://conjur.vx/health
 ```
+- The repair steps below assume that `cjr2.vx` is the new leader node
 
 ### 7.1.3 Repair cluster health after auto-failover
 - After the leader node failure and failover, the Conjur cluster is functional with 1 leader node and 1 asynchronous standby node
@@ -742,6 +743,7 @@ podman exec conjur evoke role promote
 ```
 
 #### 7.2.1.4 Confirm that the Keepalived detected the change and moved the virtual IP to the new leader node
+👀 Observe the logs and interfaces across the Conjur cluster nodes to see how Keepalived tracks the leader node changes and assign the virtual IP address according to [the steps described above](#41-how-does-keepalived-work-for-conjur-cluster)
 - Below cURL commands should succeed and output should show that the leader node is cjr2.vx
 ```console
 curl https://conjur.vx/info
