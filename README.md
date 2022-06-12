@@ -560,3 +560,11 @@ systemctl enable --now keepalived nginx
 ```console
 curl https://follower.vx/health
 ```
+
+# 7.Manual-failover Conjur cluster
+## 7.1 Manual failover procedure
+## 7.2 Failback procedure for a manual-failover Conjur cluster
+
+# 8. Auto-failover Conjur cluster
+## 8.1 Auto failover procedure
+## 8.2 Failback procedure for an auto-failover Conjur cluster
