@@ -216,6 +216,10 @@ curl https://cjr1.vx/health
 ```
 
 # 4. Keepalived setup for Conjur cluster
+- Ref:
+  - <https://www.redhat.com/sysadmin/ha-cluster-linux>
+  - <https://www.redhat.com/sysadmin/keepalived-basics>
+  - <https://www.redhat.com/sysadmin/advanced-keepalived>
 ## 4.1 How does Keepalived work for Conjur cluster?
 - Keepalived provides high availability capabilities to automatically failover the virtual service in event of a node failure
   - It uses virtual router redundancy protocol (VRRP) to assign the virtual IP to the master node
@@ -253,8 +257,6 @@ curl https://cjr1.vx/health
     |cjr3.vx|**Running**|**130**|✓|
 
 - In event of a Keepalived state change, the `conjur-ha-notify.sh` script will write an event to logger
-- Ref: <https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/load_balancer_administration/ch-keepalived-overview-vsa>
-
 - Files provided in this repo for Conjur cluster Keepalived configuration:
 
   |File|Purpose|
