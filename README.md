@@ -210,7 +210,52 @@ rm -f standby-cjr3.vx-seed.tar
 ```console
 podman exec conjur sv status conjur nginx pg seed
 ```
-- Verify that the standby is replicating from the leader
+
+## 3.4 Verify that both standby nodes are replicating from the leader
+- Check health from leader
+```console
+curl https://cjr1.vx/health
+```
+- Sample output from `replication_status` section
+```console
+    "replication_status": {
+      "pg_stat_replication": [
+        {
+          "usename": "conjur.vx",
+          "application_name": "standby_cjr2_vx_cjr2_vx",
+          "client_addr": "192.168.0.12",
+          "backend_start": "2022-06-12 06:32:49 +0000",
+          "state": "streaming",
+          "sent_lsn": "0/907AD78",
+          "replay_lsn": "0/907AD78",
+          "sync_priority": 1,
+          "sync_state": "async",
+          "sent_lsn_bytes": 151498104,
+          "replay_lsn_bytes": 151498104,
+          "replication_lag_bytes": 0
+        },
+        {
+          "usename": "conjur.vx",
+          "application_name": "standby_cjr3_vx_cjr3_vx",
+          "client_addr": "192.168.0.13",
+          "backend_start": "2022-06-12 06:33:18 +0000",
+          "state": "streaming",
+          "sent_lsn": "0/907AD78",
+          "replay_lsn": "0/907AD78",
+          "sync_priority": 2,
+          "sync_state": "async",
+          "sent_lsn_bytes": 151498104,
+          "replay_lsn_bytes": 151498104,
+          "replication_lag_bytes": 0
+        },
+```
+
+## 3.5 Enable synchronous replication
+📌 Perform on **Conjur leader node**
+```console
+podman exec conjur evoke replication sync start
+```
+- Check health from leader again, you should see the `sync_state` change from `async` to `sync` + `potential`
 ```console
 curl https://cjr1.vx/health
 ```
