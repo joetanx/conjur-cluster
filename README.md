@@ -484,7 +484,7 @@ curl https://conjur.vx/health
 
 Ref :<https://docs.cyberark.com/Product-Doc/OnlineHelp/AAM-DAP/Latest/en/Content/Deployment/DAP/manage-config-file.htm>
 ```console
-podman exec conjur sed -i 's/\# trusted_proxies: \[\]/trusted_proxies: \[192.168.17.160\]/' /etc/conjur/config/conjur.yml
+podman exec conjur sed -i 's/\# trusted_proxies: \[\]/trusted_proxies: \[192.168.17.171,192.168.17.172\]/' /etc/conjur/config/conjur.yml
 podman exec conjur evoke configuration apply
 ```
 
