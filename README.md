@@ -336,6 +336,10 @@ curl https://cjr1.vx/health
 
     ![image](images/Keepalived-Failover.png)
 
+    - ① The `conjur` service in the container or the container itself stops running
+    - ② The tracking srcipt detects this and the node loses the 50 weight it has previously gained from the running service, bringing it back to 100 priority
+    - ③ The manual/auto failover mechanisms in Conjur cluster (discussed in later sections) elects and promotes standby node 2 (cjr3.vx), the node gains 50 weight and brings it to 130 priority - being the highest priority now, it becomes the master node and brings up the virtual IP address
+
 - In event of a Keepalived state change, the `conjur-ha-notify.sh` script will write an event to logger
 - Files provided in this repo for Conjur cluster Keepalived configuration:
 
