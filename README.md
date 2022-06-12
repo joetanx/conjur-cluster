@@ -318,6 +318,7 @@ curl https://cjr1.vx/health
 
 ## 4.2 Setup Keepalived
 📌 Perform on **all nodes**
+- Install Keepalived, download and set executabled for tracking and notification scripts, backup default `keepalived.conf`
 ```console
 yum -y install keepalived
 curl -L -o /usr/libexec/keepalived/conjur-ha-check.sh https://github.com/joetanx/conjur-cluster/raw/main/conjur-ha-check.sh
@@ -327,22 +328,26 @@ chmod +x /usr/libexec/keepalived/conjur-ha-notify.sh
 mv /etc/keepalived/keepalived.conf /etc/keepalived/keepalived.conf.bak
 ```
 - 📌 Perform on **cjr1.vx**
+  - Download `keepalived.conf` for cjr1.vx
 ```console
 curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-cluster/raw/main/keepalived-cjr1.conf
 ```
 - 📌 Perform on **cjr2.vx**
+  - Download `keepalived.conf` for cjr2.vx
 ```console
 curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-cluster/raw/main/keepalived-cjr2.conf
 ```
 - 📌 Perform on **cjr3.vx**
+  - Download `keepalived.conf` for cjr3.vx
 ```console
 curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-cluster/raw/main/keepalived-cjr3.conf
 ```
 📌 Perform on **all nodes**
+- Enable and start Keepalived service
 ```console
 systemctl enable --now keepalived
 ```
-- Verify that the virtual IP working by curl-ing to the Conjur service FQDN
+- Verify that the virtual IP works by curl-ing to the Conjur service FQDN
 ```console
 curl https://conjur.vx/health
 ```
