@@ -488,10 +488,9 @@ chmod +x /usr/libexec/keepalived/nginx-ha-notify.sh
 mv /etc/keepalived/keepalived.conf /etc/keepalived/keepalived.conf.bak
 mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak
 ```
-- Configure Nginx
-  - SSL termination - using Nginx `http` module
-    - The follower certificate chain needs to be imported to Nginx to use SSL termination
-    - Detail of the certificates used in this lab environment is described [here](#22-setup-conjur-certificates)
+- Configure Nginx: Option 1 - using **SSL termination**
+  - The follower certificate chain needs to be imported to Nginx to use SSL termination
+  - Detail of the certificates used in this lab environment is described [here](#22-setup-conjur-certificates)
 ```console
 mkdir /etc/nginx/ssl
 curl -L -o /etc/nginx/ssl/follower.pem https://github.com/joetanx/conjur-cluster/raw/main/follower.pem
@@ -499,10 +498,11 @@ curl -L -o /etc/nginx/ssl/follower.key https://github.com/joetanx/conjur-cluster
 curl -L -o /etc/nginx/ssl/central.pem https://github.com/joetanx/conjur-cluster/raw/main/central.pem
 curl -L -o /etc/nginx/nginx.conf https://github.com/joetanx/conjur-cluster/raw/main/nginx-follower-http.conf
 ```
-  - SSL passthrough - Nginx `stream` module
+- Configure Nginx: Option 2 - using **SSL passthrough**
 ```console
 curl -L -o /etc/nginx/nginx.conf https://github.com/joetanx/conjur-cluster/raw/main/nginx-follower-stream.conf
 ```
+
 - 📌 Perform on **lb1.vx**
   - Download `keepalived.conf` for lb1.vx
 ```console
