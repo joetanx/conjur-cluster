@@ -168,11 +168,15 @@ scp -o StrictHostKeyChecking=no standby-cjr3.vx-seed.tar root@cjr3.vx:
 ```console
 rm -f standby-cjr* .ssh/known_hosts
 ```
+- Verify services of the Conjur container: `conjur` should be down, other services should be running
+```console
+podman exec conjur sv status conjur nginx pg seed
+```
 
-## 3.2 Configure Conjur standby 1
+## 3.2 Configure Conjur standby node 1
 📌 Perform on **Conjur standby node 1**: this is `cjr2.vx` / `192.168.0.12` in this lab environment
 - The seed generation step previously should have copied the seed file to the `/root` directory
-- Copy the seed file from host to container, unpack the seed file, Configure node as Conjur Standby
+- Copy the seed file from host to container, unpack the seed file, Configure node as Conjur standby
 ```console
 podman cp standby-cjr2.vx-seed.tar conjur:/tmp
 podman exec conjur evoke unpack seed /tmp/standby-cjr2.vx-seed.tar
@@ -187,15 +191,11 @@ rm -f standby-cjr2.vx-seed.tar
 ```console
 podman exec conjur sv status conjur nginx pg seed
 ```
-- Verify that the standby is replicating from the leader
-```console
-curl https://cjr1.vx/health
-```
 
 ## 3.3 Configure Conjur standby 2
 📌 Perform on **Conjur standby node 2**: this is `cjr3.vx` / `192.168.0.13` in this lab environment
 - The seed generation step previously should have copied the seed file to the `/root` directory
-- Copy the seed file from host to container, unpack the seed file, Configure node as Conjur Standby
+- Copy the seed file from host to container, unpack the seed file, Configure node as Conjur standby
 ```console
 podman cp standby-cjr3.vx-seed.tar conjur:/tmp
 podman exec conjur evoke unpack seed /tmp/standby-cjr3.vx-seed.tar
@@ -265,6 +265,7 @@ curl https://cjr1.vx/health
   - <https://www.redhat.com/sysadmin/ha-cluster-linux>
   - <https://www.redhat.com/sysadmin/keepalived-basics>
   - <https://www.redhat.com/sysadmin/advanced-keepalived>
+
 ## 4.1 How does Keepalived work for Conjur cluster?
 - Keepalived provides high availability capabilities to automatically failover the virtual service in event of a node failure
   - It uses virtual router redundancy protocol (VRRP) to assign the virtual IP to the master node
@@ -317,8 +318,10 @@ curl https://cjr1.vx/health
 - Google for `keepalive setenforce 0` and you can see that many guides disable SELinux - disabling SELinux completely is an easy but not recommend way to fix the script-doesn't-run behaviour
 
 ## 4.2 Setup Keepalived
-📌 Perform on **all nodes**
-- Install Keepalived, download and set executabled for tracking and notification scripts, backup default `keepalived.conf`
+📌 Perform on **all Conjur cluster nodes**
+- Install Keepalived
+- Download and set executabled for tracking and notification scripts
+- Backup default `keepalived.conf`
 ```console
 yum -y install keepalived
 curl -L -o /usr/libexec/keepalived/conjur-ha-check.sh https://github.com/joetanx/conjur-cluster/raw/main/conjur-ha-check.sh
@@ -342,12 +345,180 @@ curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-clu
 ```console
 curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-cluster/raw/main/keepalived-cjr3.conf
 ```
-📌 Perform on **all nodes**
+📌 Perform on **all Conjur cluster nodes**
 - Enable and start Keepalived service
 ```console
 systemctl enable --now keepalived
 ```
-- Verify that the virtual IP works by curl-ing to the Conjur service FQDN
+- Verify that the virtual IP works by curl-ing to the Conjur cluster service FQDN
 ```console
 curl https://conjur.vx/health
+```
+
+# 5. Setup follower nodes
+## 5.1 Generate seed files on Conjur leader node
+📌 Perform on **Conjur leader node**
+- These commands generate the seed files and copy them to the follower nodes using scp
+```console
+podman exec conjur evoke seed follower flr1.vx conjur.vx > follower-flr1.vx-seed.tar
+podman exec conjur evoke seed follower flr2.vx conjur.vx > follower-flr2.vx-seed.tar
+scp -o StrictHostKeyChecking=no follower-flr1.vx-seed.tar root@flr1.vx:
+scp -o StrictHostKeyChecking=no follower-flr2.vx-seed.tar root@flr2.vx:
+```
+- Clean-up
+```console
+rm -f standby-flr* .ssh/known_hosts
+```
+
+## 5.2 Configure Conjur follower node 1
+📌 Perform on **Conjur follower node 1**: this is `flr1.vx` / `192.168.0.21` in this lab environment
+- The seed generation step previously should have copied the seed file to the `/root` directory
+- Copy the seed file from host to container, unpack the seed file, Configure node as Conjur follower
+```console
+podman cp follower-flr1.vx-seed.tar conjur:/tmp
+podman exec conjur evoke unpack seed /tmp/follower-flr1.vx-seed.tar
+podman exec conjur evoke configure follower
+```
+- Clean-up
+```console
+podman exec conjur rm -rf /tmp/follower-flr1.vx-seed.tar
+rm -f follower-flr1.vx-seed.tar
+```
+
+## 5.3 Configure Conjur follower node 2
+📌 Perform on **Conjur follower node 2**: this is `flr2.vx` / `192.168.0.22` in this lab environment
+- The seed generation step previously should have copied the seed file to the `/root` directory
+- Copy the seed file from host to container, unpack the seed file, Configure node as Conjur follower
+```console
+podman cp follower-flr2.vx-seed.tar conjur:/tmp
+podman exec conjur evoke unpack seed /tmp/follower-flr2.vx-seed.tar
+podman exec conjur evoke configure follower
+```
+- Clean-up
+```console
+podman exec conjur rm -rf /tmp/follower-flr2.vx-seed.tar
+rm -f follower-flr2.vx-seed.tar
+```
+
+## 5.4 Verify that both follower nodes are replicating from the leader
+- Check health from leader
+```console
+curl https://conjur.vx/health
+```
+- Sample output from `replication_status` section
+```console
+    "replication_status": {
+      "pg_stat_replication": [
+        • • • • • •
+        {
+          "usename": "follower.vx",
+          "application_name": "follower_flr1_vx_flr1_vx",
+          "client_addr": "192.168.17.161",
+          "backend_start": "2022-06-12 07:58:43 +0000",
+          "state": "streaming",
+          "sent_lsn": "0/907AD78",
+          "replay_lsn": "0/907AD78",
+          "sync_priority": 0,
+          "sync_state": "async",
+          "sent_lsn_bytes": 151498104,
+          "replay_lsn_bytes": 151498104,
+          "replication_lag_bytes": 0
+        },
+        {
+          "usename": "follower.vx",
+          "application_name": "follower_flr2_vx_flr2_vx",
+          "client_addr": "192.168.17.162",
+          "backend_start": "2022-06-12 07:57:27 +0000",
+          "state": "streaming",
+          "sent_lsn": "0/907AD78",
+          "replay_lsn": "0/907AD78",
+          "sync_priority": 0,
+          "sync_state": "async",
+          "sent_lsn_bytes": 151498104,
+          "replay_lsn_bytes": 151498104,
+          "replication_lag_bytes": 0
+        }
+```
+## 5.5 Add the virtual IP of the follower service to trusted proxies on follower nodes
+📌 Perform on **both Conjur follower nodes**
+Ref :<https://docs.cyberark.com/Product-Doc/OnlineHelp/AAM-DAP/Latest/en/Content/Deployment/DAP/manage-config-file.htm>
+```console
+podman exec conjur sed -i 's/\# trusted_proxies: \[\]/trusted_proxies: \[192.168.17.160\]/' /etc/conjur/config/conjur.yml
+podman exec conjur evoke configuration apply
+```
+
+# 6. Load balancer setup for Conjur follower nodes
+- The load balancer nodes use Keepalived and Nginx
+- Keepalived provides high availability capabilities to automatically failover the virtual service in event of a node failure
+  - Keepalived works for Nginx in a similar way as explained in [Conjur section](#41-how-does-keepalived-work-for-conjur-cluster), except:
+    - `track_process` is used for track the status of Nginx service, instead of the `track_script` used in Conjur
+    - `nginx-ha-notify.sg` script includes starting/stopping for Nginx service on state change
+- Nginx provides reverse proxy and load balancing capabilities to broker connection to, and handle failures for backend Conjur follower nodes
+  - There are 2 ways to perform this:
+    - SSL termination - using Nginx `http` module
+    - SSL passthrough - Nginx `stream` module
+- Ref:
+  - <https://docs.nginx.com/nginx/admin-guide/load-balancer/http-load-balancer/>
+  - <https://docs.nginx.com/nginx/admin-guide/security-controls/terminating-ssl-tcp/>
+  - <https://docs.nginx.com/nginx/admin-guide/load-balancer/tcp-udp-load-balancer/>
+- Files provided in this repo for Conjur follower load balancer configuration:
+
+  |File|Purpose|
+  |---|---|
+  |nginx-ha-notify.sh|Script to write event to logger and start/stop Nginx service on Keepalived status change|
+  |keepalived-lb1.conf|Configuration file for cjr1.vx|
+  |keepalived-lb2.conf|Configuration file for cjr2.vx|
+  |nginx-follower-http.conf|Configuration file for Nginx using http module (SSL termination)|
+  |nginx-follower-stream.conf|Configuration file for Nginx using stream module (SSL passthrough)|
+  
+## 6.1 Setup load balancer nodes
+📌 Perform on **both lb nodes**
+- Install Keepalived and Nginx
+- Allow Nginx to communicate on HTTP on SELinux and firewalld
+- Download and set executabled for tracking and notification scripts
+- Backup default `keepalived.conf` and `nginx.conf`
+```console
+yum -y install keepalived nginx
+setsebool -P httpd_can_network_connect on
+firewall-cmd --permanent --add-service https && firewall-cmd --reload
+curl -L -o /usr/libexec/keepalived/nginx-ha-check.sh https://github.com/joetanx/conjur-cluster/raw/main/nginx-ha-check.sh
+curl -L -o /usr/libexec/keepalived/nginx-ha-notify.sh https://github.com/joetanx/conjur-cluster/raw/main/nginx-ha-notify.sh
+chmod +x /usr/libexec/keepalived/nginx-ha-check.sh
+chmod +x /usr/libexec/keepalived/nginx-ha-notify.sh
+mv /etc/keepalived/keepalived.conf /etc/keepalived/keepalived.conf.bak
+mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak
+```
+- Configure Nginx
+  - SSL termination - using Nginx `http` module
+    - The follower certificate chain needs to be imported to Nginx to use SSL termination
+    - Detail of the certificates used in this lab environment is described [here](#22-setup-conjur-certificates)
+```console
+mkdir /etc/nginx/ssl
+curl -L -o /etc/nginx/ssl/follower.pem https://github.com/joetanx/conjur-cluster/raw/main/follower.pem
+curl -L -o /etc/nginx/ssl/follower.key https://github.com/joetanx/conjur-cluster/raw/main/follower.key
+curl -L -o /etc/nginx/ssl/central.pem https://github.com/joetanx/conjur-cluster/raw/main/central.pem
+curl -L -o /etc/nginx/nginx.conf https://github.com/joetanx/conjur-cluster/raw/main/nginx-follower-http.conf
+```
+  - SSL passthrough - Nginx `stream` module
+```console
+curl -L -o /etc/nginx/nginx.conf https://github.com/joetanx/conjur-cluster/raw/main/nginx-follower-stream.conf
+```
+- 📌 Perform on **lb1.vx**
+  - Download `keepalived.conf` for lb1.vx
+```console
+curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-cluster/raw/main/keepalived-lb1.conf
+```
+- 📌 Perform on **lb2.vx**
+  - Download `keepalived.conf` for lb2.vx
+```console
+curl -L -o /etc/keepalived/keepalived.conf https://github.com/joetanx/conjur-cluster/raw/main/keepalived-lb2.conf
+```
+📌 Perform on **both lb nodes**
+- Enable and start Keepalived and Nginx service
+```console
+systemctl enable --now keepalived nginx
+```
+- Verify that the virtual IP works by curl-ing to the Conjur follower service FQDN
+```console
+curl https://follower.vx/health
 ```
