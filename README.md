@@ -19,14 +19,14 @@ A guide to setup Conjur Enterprise cluster and followers on Podman on RHEL 9 usi
 |Function|Hostname|IP Address|
 |---|---|---|
 |Conjur cluster service|conjur.vx|192.168.0.10|
-|Conjur leader node|cjr1vx|192.168.0.11|
-|Conjur synchronous standby node|cjr2vx|192.168.0.12|
-|Conjur asynchronous standby node|cjr3vx|192.168.0.13|
+|Conjur leader node|cjr1.vx|192.168.0.11|
+|Conjur standby node 1|cjr2.vx|192.168.0.12|
+|Conjur standby node 2|cjr3.vx|192.168.0.13|
 |Conjur follower service|follower.vx|192.168.0.20|
-|Conjur follower nodes|flr{1..2}vx|192.168.0.{21..22}|
+|Conjur follower nodes|flr{1..2}.vx|192.168.0.{21..22}|
 |Load balancers|lb{1..2}.vx|192.168.0.{31..32}|
 
-# 1.0 Setup host prerequisites and Conjur appliance container on all Conjur nodes
+# 1. Setup host prerequisites and Conjur appliance container on all Conjur nodes
 ☝️ Perform on **all Conjur nodes**
 # 1.1 Setup host prerequisites
 - Install Podman
@@ -107,7 +107,7 @@ podman generate systemd conjur --name --container-prefix="" --separator="" > /et
 systemctl enable conjur
 ```
 
-# 2.0 Setup Conjur leader node
+# 2. Setup Conjur leader node
 ☝️ Perform on **Conjur leader node**: the leader node is `cjr1.vx` / `192.168.0.11` in this lab environment
 ## 2.1 Configure Conjure leader
 - Edit the admin account password in `-p` option and the Conjur account (`cyberark`) according to your environment
@@ -144,4 +144,73 @@ podman exec conjur cp /opt/conjur/etc/ssl/follower.vx.key /opt/conjur/etc/ssl/fl
 ```console
 podman exec conjur rm -rf /opt/cyberark/dap/certificates
 rm -f conjur-certs.tgz
+```
+
+## 2.3 Verify status of Conjur leader
+- Verify the Conjur health and all services are running before continuing to setup standby nodes
+```console
+curl https://cjr1.vx/info
+curl https://cjr1.vx/health
+podman exec conjur sv status conjur nginx pg seed
+```
+
+# 3. Setup Conjur standby nodes
+## 3.1 Generate seed files on Conjur leader node
+☝️ Perform on **Conjur leader node**
+- These commands generate the seed files and copy them to the standby nodes using scp
+```console
+podman exec conjur evoke seed standby cjr2.vx cjr1.vx > standby-cjr2.vx-seed.tar
+podman exec conjur evoke seed standby cjr3.vx cjr1.vx > standby-cjr3.vx-seed.tar
+scp -o StrictHostKeyChecking=no standby-cjr2.vx-seed.tar root@cjr2.vx:
+scp -o StrictHostKeyChecking=no standby-cjr3.vx-seed.tar root@cjr3.vx:
+```
+- Clean-up
+```console
+rm -f standby-cjr* .ssh/known_hosts
+```
+
+## 3.2 Configure Conjur Standby 1
+☝️ Perform on **Conjur standby node 1**: this is `cjr2.vx` / `192.168.0.12` in this lab environment
+- The seed generation step previously should have copied the seed file to the `/root` directory
+- Copy the seed file from host to container, unpack the seed file, Configure node as Conjur Standby
+```console
+podman cp standby-cjr2.vx-seed.tar conjur:/tmp
+podman exec conjur evoke unpack seed /tmp/standby-cjr2.vx-seed.tar
+podman exec conjur evoke configure standby
+```
+- Clean-up
+```console
+podman exec conjur rm -rf /tmp/standby-cjr2.vx-seed.tar
+rm -f standby-cjr2.vx-seed.tar
+```
+- Verify services of the Conjur container: `conjur` should be down, other services should be running
+```console
+podman exec conjur sv status conjur nginx pg seed
+```
+- Verify that the standby is replicating from the leader
+```console
+curl https://cjr1.vx/health
+```
+
+## 3.3 Configure Conjur Standby 2
+☝️ Perform on **Conjur standby node 2**: this is `cjr3.vx` / `192.168.0.13` in this lab environment
+- The seed generation step previously should have copied the seed file to the `/root` directory
+- Copy the seed file from host to container, unpack the seed file, Configure node as Conjur Standby
+```console
+podman cp standby-cjr3.vx-seed.tar conjur:/tmp
+podman exec conjur evoke unpack seed /tmp/standby-cjr3.vx-seed.tar
+podman exec conjur evoke configure standby
+```
+- Clean-up
+```console
+podman exec conjur rm -rf /tmp/standby-cjr3.vx-seed.tar
+rm -f standby-cjr3.vx-seed.tar
+```
+- Verify services of the Conjur container: `conjur` should be down, other services should be running
+```console
+podman exec conjur sv status conjur nginx pg seed
+```
+- Verify that the standby is replicating from the leader
+```console
+curl https://cjr1.vx/health
 ```
