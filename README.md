@@ -67,7 +67,7 @@ This guide walks through the setup for Conjur Enterprise cluster and followers o
 yum -y install podman
 podman load -i conjur-appliance_12.6.0.tar.gz
 mkdir -p /opt/conjur/{security,config,backups,seeds,logs}
-curl -L -o conjur-cli-rhel-8.tar.gz https://github.com/cyberark/conjur-api-python3/releases/download/v7.1.0/conjur-cli-rhel-8.tar.gz
+curl -L -O https://github.com/cyberark/conjur-api-python3/releases/download/v7.1.0/conjur-cli-rhel-8.tar.gz
 tar xvf conjur-cli-rhel-8.tar.gz
 mv conjur /usr/local/bin/
 ```
@@ -159,7 +159,7 @@ podman exec conjur evoke configure master --accept-eula -h conjur.vx --master-al
 
 - ☝️ **Note**: In event of `error: cert already in hash table`, ensure that the Conjur serverfollower certificates do not contain the CA certificate
 ```console
-curl -L -o conjur-certs.tgz https://github.com/joetanx/conjur-cluster/raw/main/conjur-certs.tgz
+curl -L -O https://github.com/joetanx/conjur-cluster/raw/main/conjur-certs.tgz
 podman cp conjur-certs.tgz conjur:/opt/cyberark/dap/certificates/
 podman exec conjur tar xvf /opt/cyberark/dap/certificates/conjur-certs.tgz -C /opt/cyberark/dap/certificates/
 podman exec conjur evoke ca import -fr /opt/cyberark/dap/certificates/central.pem
@@ -595,7 +595,7 @@ conjur login -i admin -p CyberArk123!
 - Download the auto-failover cluster policy and load to the Conjur cluster
 - ☝️ **Note**: do read the policy structure in CyberArk Docs and the provided `vx-cluster.yaml` file to understand what the policy does
 ```console
-curl -L -o vx-cluster.yaml https://github.com/joetanx/conjur-cluster/raw/main/vx-cluster.yaml
+curl -L -O https://github.com/joetanx/conjur-cluster/raw/main/vx-cluster.yaml
 conjur policy load -b root -f vx-cluster.yaml
 ```
 - Clean-up
