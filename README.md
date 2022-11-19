@@ -148,7 +148,7 @@ podman exec conjur evoke configure master --accept-eula -h conjur.vx --master-al
 ## 2.2 Setup Conjur certificates
 ### Lab environment certificate chain
 - The `conjur-certs.tgz` includes my personal certificate chain for CA, leader and follower, you should generate your own certificates
-- Refer to <https://joetanx.github.io/self-signed-ca/> for a guide to generate your own certificates
+- Refer to <https://github.com/joetanx/self-signed-ca/> for a guide to generate your own certificates
 - ☝️ **Note**: The Common Name of Conjur certificates should be the FQDN of the access endpoint, otherwise errors will occur
 
 |Certificate|Purpose|Common Name|Subject Alternative Names|
